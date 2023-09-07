@@ -1,0 +1,50 @@
+# Code lint and style checks
+#
+# This workflow runs code style and lint checks to check if the codes have
+# consistent code style and are high-quality.
+#
+# It is run on every commit to the main and pull request branches. It is also
+# scheduled to run daily on the main branch.
+#
+name: Style Checks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  # Schedule daily tests
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  style_check:
+    name: Style Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout current git repository
+      - name: Checkout
+        uses: actions/checkout@v3.5.3
+
+      # Setup Python
+      - name: Set up Python
+        uses: actions/setup-python@v4.7.0
+        with:
+          python-version: '3.11'
+
+      - name: Install packages
+        run: |
+          python -m pip install black blackdoc docformatter flakeheaven pylint isort
+          sudo apt-get install dos2unix
+
+      - name: Formatting check (black, blackdoc, docformatter, flakeheaven and isort)
+        run: make check
+
+      - name: Linting (pylint)
+        run: make lint
+
+      - name: Ensure files use UNIX line breaks and have 644 permission
+        run: |
+          find . -type f -not -path '*/\.git/*' -exec grep -Iq . {} \; -exec dos2unix --quiet {} \;
+          find . -type f -not -path '*/\.git/*' -exec grep -Iq . {} \; -exec chmod 644 {} \;
+          if [[ $(git ls-files -m) ]]; then git --no-pager diff HEAD; exit 1; fi

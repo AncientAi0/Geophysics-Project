@@ -1,0 +1,73 @@
+# Cache GMT remote data files and uploads as artifacts
+#
+# This workflow downloads data files needed by PyGMT tests/documentation from
+# the GMT data server and uploads as workflow artifacts which can be accessed
+# by other GitHub Actions workflows.
+#
+# It is scheduled to run every Sunday at 12:00 (UTC). If new remote files are
+# needed urgently, maintainers can manually uncomment the 'pull_request:' line
+# below to refresh the cache.
+#
+name: Cache data
+
+on:
+  # Uncomment the 'pull_request' line below to manually re-cache data artifacts
+  # pull_request:
+  # Schedule runs on 12 noon every Sunday
+  schedule:
+    - cron: '0 12 * * 0'
+
+jobs:
+  gmt_cache:
+    name: Cache GMT artifacts
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      # Checkout current git repository
+      - name: Checkout
+        uses: actions/checkout@v3.5.3
+        with:
+          # fetch all history so that setuptools-scm works
+          fetch-depth: 0
+
+      # Install Micromamba with conda-forge dependencies
+      - name: Setup Micromamba
+        uses: mamba-org/setup-micromamba@v1.4.3
+        with:
+          environment-name: pygmt
+          condarc: |
+            channels:
+              - conda-forge
+              - nodefaults
+          create-args: >-
+            python=3.11
+            gmt=6.4.0
+            numpy
+            pandas
+            xarray
+            netCDF4
+            packaging
+            build
+
+      # Install the package that we want to test
+      - name: Install the package
+        run: |
+          python -m build --sdist
+          python -m pip install dist/*
+
+      # Download remote files
+      - name: Download remote data
+        run: |
+          python -c "from pygmt.helpers.testing import download_test_data; download_test_data()"
+
+      # Upload the downloaded files as artifacts to GitHub
+      - name: Upload artifacts to GitHub
+        uses: actions/upload-artifact@v3
+        with:
+          name: gmt-cache
+          path: |
+              ~/.gmt/cache
+              ~/.gmt/server
